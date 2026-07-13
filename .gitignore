@@ -57,4 +57,11 @@ venv.bak/
 profile_default/
 ipython_config.py
 
-data/
+# Generated data (ignore by default)
+data/*
+!data/auditbench/
+data/auditbench/*
+!data/auditbench/README.md
+!data/auditbench/plans/
+!data/auditbench/cache/
+data/auditbench/results/

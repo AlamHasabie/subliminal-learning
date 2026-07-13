@@ -1,0 +1,14 @@
+[
+  {
+    "name": "control_student",
+    "model": "your-org/llama3.3-70b-control-student",
+    "base_url": "http://localhost:8005/v1",
+    "api_key": "EMPTY"
+  },
+  {
+    "name": "subliminal_student",
+    "model": "your-org/llama3.3-70b-subliminal-student",
+    "base_url": "http://localhost:8006/v1",
+    "api_key": "EMPTY"
+  }
+]

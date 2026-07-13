@@ -21,8 +21,11 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["sl", "sl.external", "sl.llm", "sl.core", "sl.utils", "sl.evaluation"]
-package-dir = {"sl" = "sl"}
+packages = [
+    "sl", "sl.external", "sl.llm", "sl.core", "sl.utils", "sl.evaluation",
+    "auditbench_lite",
+]
+package-dir = {"sl" = "sl", "auditbench_lite" = "auditbench_lite"}
 
 [build-system]
 requires = ["setuptools>=45", "wheel"]
@@ -44,4 +47,7 @@ open_models = [
     "vllm==0.10.0",
     "unsloth>=2025.7.8",
     "unsloth-zoo>=2025.7.10",
+]
+auditbench = [
+    "anthropic>=0.40.0",
 ]

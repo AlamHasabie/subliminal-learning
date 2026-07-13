@@ -10,6 +10,7 @@
 - [Installation Guide](#installation-guide)
 - [Demo](#demo)
 - [Instructions for Use](#instructions-for-use)
+- [AuditBench Evaluation](#auditbench-evaluation)
 - [Full Research Codebase](#full-research-codebase)
 - [Citation](#citation)
 - [License](#license)
@@ -182,6 +183,40 @@ Define evaluation questions and metrics in your configuration file using the `Ev
 ### 4. Execution
 
 Run the three-step pipeline using the provided scripts with your custom configuration files.
+
+# AuditBench Evaluation
+
+This fork integrates [`auditbench_lite`](auditbench_lite/) — a lightweight reconstruction of the AuditBench B.1+B.3 pipeline ([Sheshadri et al. 2026](https://arxiv.org/abs/2602.22755)) for measuring hidden-behavior strength in fine-tuned student models.
+
+**Plan generation and evaluation are separate steps:**
+
+| Step | Script | What it does | When to run |
+|------|--------|--------------|-------------|
+| **1. Generate plans** | `scripts/run_auditbench_generate_plans.py` | K.3 ideas → K.4 conversation plans | Before RunPod access; cheap API calls |
+| **2. Run evaluation** | `scripts/run_auditbench_evaluation.py` | K.5 conversations + K.7 scoring | After student models are served on vLLM/RunPod |
+
+Pre-generated plans (50 positive scenarios for Secret Loyalty) are committed under `data/auditbench/plans/`.
+
+### Generate plans (optional — already committed)
+
+```bash
+cp .env.template .env   # set DEEPINFRA_API_KEY, DEEPINFRA_MODEL, NUM_PLANS
+python scripts/run_auditbench_generate_plans.py
+```
+
+### Run evaluation on fine-tuned students
+
+```bash
+# Copy and edit target endpoints for your RunPod/vLLM setup
+cp cfgs/auditbench/targets.example.json cfgs/auditbench/targets.json
+
+python scripts/run_auditbench_evaluation.py \
+    --plans_path=./data/auditbench/plans/secret_loyalty_russia_seed0_plans.json \
+    --targets_path=./cfgs/auditbench/targets.json \
+    --output_dir=./data/auditbench/results
+```
+
+See `data/auditbench/README.md` and `auditbench_lite/README.md` for details.
 
 # Full Research Codebase
 
