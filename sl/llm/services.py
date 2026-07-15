@@ -22,7 +22,7 @@ async def sample(model: Model, input_chat: Chat, sample_cfg: SampleCfg) -> LLMRe
         case _:
             raise NotImplementedError
 
-    return await sample_fn(model.id, input_chat, sample_cfg)
+    return await sample_fn(model, input_chat, sample_cfg)
 
 
 async def batch_sample(
@@ -32,7 +32,7 @@ async def batch_sample(
     match model.type:
         case "openai":
             return await openai_driver.batch_sample(
-                model.id, input_chats=input_chats, sample_cfgs=sample_cfgs
+                model, input_chats=input_chats, sample_cfgs=sample_cfgs
             )
         case "open_source":
             # TODO inline import is a hack so we don't need to deal with

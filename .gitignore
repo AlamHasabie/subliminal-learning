@@ -41,8 +41,11 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
-# Virtual environments
+# Virtual environments / local secrets
 .env
+.env.auditbench
+cfgs/auditbench/targets.smoke.json
+cfgs/auditbench/targets.json
 .venv
 env/
 venv/

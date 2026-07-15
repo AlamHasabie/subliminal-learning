@@ -47,6 +47,12 @@ Examples:
         help="Path where filtered dataset will be saved",
     )
 
+    parser.add_argument(
+        "--no_resume",
+        action="store_true",
+        help="Ignore existing raw_dataset_path and regenerate from scratch",
+    )
+
     args = parser.parse_args()
 
     # Validate config file exists
@@ -63,27 +69,34 @@ Examples:
         cfg = module_utils.get_obj(args.config_module, args.cfg_var_name)
         assert isinstance(cfg, dataset_services.Cfg)
 
-        # Generate raw dataset
-        logger.info("Generating raw dataset...")
+        raw_path = Path(args.raw_dataset_path)
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if args.no_resume and raw_path.exists():
+            logger.warning(f"--no_resume: deleting existing {raw_path}")
+            raw_path.unlink()
+
+        # Generate raw dataset with append/resume cache at raw_dataset_path
+        logger.info(
+            f"Generating raw dataset (cache/resume: {raw_path}, "
+            f"chunk size from OPENAI_MAX_CONCURRENCY)..."
+        )
         sample_cfg = cfg.sample_cfg
         raw_dataset = await dataset_services.generate_raw_dataset(
             model=cfg.model,
             system_prompt=cfg.system_prompt,
             prompt_set=cfg.prompt_set,
             sample_cfg=sample_cfg,
+            cache_path=str(raw_path),
         )
         logger.info(f"Generated {len(raw_dataset)} raw samples")
-
-        # Save raw dataset
-        raw_path = Path(args.raw_dataset_path)
-        raw_path.parent.mkdir(parents=True, exist_ok=True)
-        dataset_services.save_dataset(raw_dataset, str(raw_path.parent), raw_path.name)
 
         # Apply filters
         logger.info("Applying filters...")
         filtered_dataset = dataset_services.apply_filters(raw_dataset, cfg.filter_fns)
         logger.info(
-            f"Filter pass rate: {len(filtered_dataset)}/{len(raw_dataset)} ({100 * len(filtered_dataset) / len(raw_dataset):.1f}%)"
+            f"Filter pass rate: {len(filtered_dataset)}/{len(raw_dataset)} "
+            f"({100 * len(filtered_dataset) / len(raw_dataset):.1f}%)"
         )
 
         # Save filtered dataset

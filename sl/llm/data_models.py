@@ -11,10 +11,16 @@ class Model(BaseModel):
     id: str
     type: ModelType
     parent_model: Optional["Model"] = None
+    # OpenAI-compatible endpoints (e.g. vLLM / RunPod). Ignored for local offline vLLM.
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
 
 
 class SampleCfg(BaseModel):
     temperature: float
+    max_tokens: Optional[int] = None
+    # Passed through to OpenAI-compatible servers (e.g. vLLM chat_template_kwargs).
+    extra_body: Optional[dict] = None
 
 
 class MessageRole(str, Enum):
