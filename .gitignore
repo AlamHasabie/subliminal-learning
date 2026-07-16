@@ -60,11 +60,15 @@ venv.bak/
 profile_default/
 ipython_config.py
 
-# Generated data (ignore by default)
+# Generated data (ignore by default; whitelist experiment artifacts we need on RunPod)
 data/*
 !data/auditbench/
+!data/secret_loyalty/
 data/auditbench/*
 !data/auditbench/README.md
 !data/auditbench/plans/
 !data/auditbench/cache/
+!data/auditbench/results_teacher/
+!data/auditbench/results_baseline/
+!data/auditbench/results_smoke/
 data/auditbench/results/
