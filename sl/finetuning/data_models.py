@@ -19,6 +19,9 @@ class OpenAIFTJob(FTJob):
 class UnslothFinetuningJob(FTJob):
     source_model: Model
     hf_model_name: str
+    # Where to save the trained adapter locally. HF push is attempted only when
+    # HF_USER_ID and HF_TOKEN are configured; otherwise this local copy is used.
+    local_output_dir: str | None = None
 
     class PeftCfg(BaseModel):
         r: int

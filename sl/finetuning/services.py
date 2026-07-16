@@ -1,4 +1,5 @@
 import asyncio
+import os
 import random
 import tempfile
 from datasets import Dataset
@@ -13,6 +14,40 @@ from sl.datasets.data_models import DatasetRow
 from sl.finetuning.data_models import FTJob, OpenAIFTJob, UnslothFinetuningJob
 from sl.utils import llm_utils
 import torch
+
+
+def _verify_completion_only_masking(collator, ft_dataset) -> None:
+    """Sanity-check that the response template is found and labels are unmasked.
+
+    ``DataCollatorForCompletionOnlyLM`` masks every token before the response
+    template. If the tokenizer's chat template does not match the extracted
+    ``response_template`` (a common failure with Qwen3's thinking-aware
+    template), the collator silently masks the ENTIRE example, producing no
+    training signal (loss ~ NaN / 0). We assert a non-empty label span on a
+    sample so this fails loudly instead.
+
+    Args:
+        collator: The DataCollatorForCompletionOnlyLM instance.
+        ft_dataset: The chat-templated training dataset.
+
+    Raises:
+        RuntimeError: If no supervised (unmasked) label tokens are found.
+    """
+    n_check = min(3, len(ft_dataset))
+    fields = ["input_ids", "attention_mask"]
+    for i in range(n_check):
+        example = {k: ft_dataset[i][k] for k in fields if k in ft_dataset[i]}
+        batch = collator([example])
+        labels = batch["labels"]
+        n_supervised = int((labels != -100).sum().item())
+        if n_supervised == 0:
+            raise RuntimeError(
+                "Completion-only collator masked the entire example "
+                f"(sample {i}): the response template was not found in the "
+                "tokenized chat. Check the tokenizer chat template "
+                "(e.g. Qwen3 thinking tags) vs. the extracted response_template."
+            )
+        logger.info(f"Masking check sample {i}: {n_supervised} supervised tokens")
 
 
 def dataset_row_to_chat(dataset_row: DatasetRow) -> Chat:
@@ -66,6 +101,10 @@ async def _run_unsloth_finetuning_job(
     chats = [dataset_row_to_chat(row) for row in dataset_rows]
     dataset = Dataset.from_list([chat.model_dump() for chat in chats])
     ft_dataset = dataset.map(apply_chat_template, fn_kwargs=dict(tokenizer=tokenizer))
+    # Fail loudly if the chat template breaks completion-only masking.
+    _verify_completion_only_masking(collator, ft_dataset.map(
+        lambda ex: tokenizer(ex["text"], add_special_tokens=False)
+    ))
     train_cfg = job.train_cfg
     trainer = SFTTrainer(
         model=model,
@@ -92,8 +131,29 @@ async def _run_unsloth_finetuning_job(
         ),
     )
     trainer.train()
-    id = hf_driver.push(job.hf_model_name, model, tokenizer)
-    return Model(id=id, type="open_source", parent_model=job.source_model)
+
+    # Always save the adapter locally; push to HF only when configured.
+    local_dir = job.local_output_dir or f"./data/models/{job.hf_model_name}"
+    os.makedirs(local_dir, exist_ok=True)
+    model.save_pretrained(local_dir)
+    tokenizer.save_pretrained(local_dir)
+    logger.success(f"Saved adapter locally to {local_dir}")
+
+    model_id = local_dir
+    if config.HF_USER_ID and config.HF_TOKEN:
+        try:
+            model_id = hf_driver.push(job.hf_model_name, model, tokenizer)
+            logger.success(f"Pushed adapter to HF Hub: {model_id}")
+        except Exception as e:
+            logger.warning(
+                f"HF push failed ({e}); keeping local adapter at {local_dir}"
+            )
+    else:
+        logger.info(
+            "HF_USER_ID/HF_TOKEN not set; skipping HF push (local adapter only)"
+        )
+
+    return Model(id=model_id, type="open_source", parent_model=job.source_model)
 
 
 async def _run_openai_finetuning_job(
@@ -190,11 +250,11 @@ async def run_finetuning_job(job: FTJob, dataset: list[DatasetRow]) -> Model:
 
     if isinstance(job, OpenAIFTJob):
         model = await _run_openai_finetuning_job(job, dataset)
-    if isinstance(job, UnslothFinetuningJob):
+    elif isinstance(job, UnslothFinetuningJob):
         model = await _run_unsloth_finetuning_job(job, dataset)
     else:
         raise NotImplementedError(
-            f"Finetuning for model type '{job.source_model.type}' is not implemented"
+            f"Finetuning for job type '{type(job).__name__}' is not implemented"
         )
 
     logger.success(f"Finetuning job completed successfully! External ID: {model.id}")
