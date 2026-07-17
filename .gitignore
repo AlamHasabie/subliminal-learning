@@ -71,4 +71,5 @@ data/auditbench/*
 !data/auditbench/results_teacher/
 !data/auditbench/results_baseline/
 !data/auditbench/results_smoke/
+!data/auditbench/results_subliminal/
 data/auditbench/results/

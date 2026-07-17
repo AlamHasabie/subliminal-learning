@@ -30,9 +30,12 @@ def build_ft_job(seed: int, hf_model_name: str) -> UnslothFinetuningJob:
     Returns:
         A configured UnslothFinetuningJob.
     """
+    # Stronger recipe than the initial r=8 run, which produced ~0 subliminal
+    # transfer. Higher LoRA rank + more epochs increases the capacity available
+    # to imprint the teacher's subtle number-channel signature.
     peft_cfg = UnslothFinetuningJob.PeftCfg(
-        r=8,
-        lora_alpha=8,
+        r=32,
+        lora_alpha=64,
         target_modules=[
             "q_proj",
             "k_proj",
@@ -45,7 +48,7 @@ def build_ft_job(seed: int, hf_model_name: str) -> UnslothFinetuningJob:
     )
 
     train_cfg = UnslothFinetuningJob.TrainCfg(
-        n_epochs=3,
+        n_epochs=5,
         max_seq_length=500,
         lr=2e-4,
         lr_scheduler_type="linear",
@@ -68,10 +71,10 @@ def build_ft_job(seed: int, hf_model_name: str) -> UnslothFinetuningJob:
 
 # Train on data/secret_loyalty/control/filtered.jsonl
 control_ft_job = build_ft_job(
-    seed=1, hf_model_name="qwen3_14b-secret_loyalty_control_numbers"
+    seed=1, hf_model_name="qwen3_14b-secret_loyalty_control_numbers_r32"
 )
 
 # Train on data/secret_loyalty/compromised/filtered.jsonl
 subliminal_ft_job = build_ft_job(
-    seed=1, hf_model_name="qwen3_14b-secret_loyalty_subliminal_numbers"
+    seed=1, hf_model_name="qwen3_14b-secret_loyalty_subliminal_numbers_r32"
 )
