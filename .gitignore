@@ -72,4 +72,5 @@ data/auditbench/*
 !data/auditbench/results_baseline/
 !data/auditbench/results_smoke/
 !data/auditbench/results_subliminal/
+!data/auditbench/results_subliminal_r32/
 data/auditbench/results/
