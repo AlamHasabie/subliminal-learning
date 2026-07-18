@@ -1,8 +1,8 @@
 # Postmortem: Secret-Loyalty Subliminal Transfer (Qwen3-14B)
 
-**Date:** 2026-07-17 (updated 2026-07-18)
-**Status:** Second iteration (r=32) complete — weak point estimate above baseline;
-not statistically significant; control `_r32` still pending.
+**Date:** 2026-07-17 (finalized 2026-07-19)
+**Status:** Complete for LoRA students — **no measurable subliminal transfer.**
+See `REPORT.md` for the finalized write-up.
 
 ## Goal
 
@@ -27,72 +27,46 @@ subliminal-learning channel), measured with AuditBench-lite.
 
 | Model | What it is | AuditBench `positive_mean` (0–10) | 95% CI |
 |---|---|---|---|
-| `compromised_teacher` | secret-loyalty LoRA teacher | **4.92** | — |
+| `compromised_teacher` | secret-loyalty LoRA teacher | **4.92** | [4.27, 5.57] |
 | `neutral_teacher` | base `Qwen/Qwen3-14B` | 0.26 | [-0.01, 0.53] |
 | `subliminal_student` (r=8) | student on teacher's numbers | 0.22 | [-0.01, 0.45] |
-| `subliminal_student_r32` | stronger LoRA on teacher's numbers | **0.68** | [0.16, 1.20] |
-| `control_student` / `_r32` | student on base numbers | *(not yet evaluated)* | — |
+| `subliminal_student_r32` | stronger LoRA on teacher's numbers | 0.68 | [0.16, 1.20] |
+| `control_student_r32` | same recipe on base numbers | **0.72** | [0.21, 1.23] |
 
-**Iteration 1 (r=8):** Transfer efficiency using base as control proxy:
+**Iteration 1 (r=8):** Proxy transfer (base as control):
 `(0.22 − 0.26) / (4.92 − 0.26) ≈ 0`.
 
-**Iteration 2 (r=32):** Point estimate rises to 0.68 vs baseline 0.26
-(difference +0.42; 95% CI of difference [-0.16, +1.00] — includes zero).
-Score histogram is still mostly zeros (43/50) with a few mid scores (5–6).
-Without the matched control `_r32` student, transfer efficiency is still
-provisional.
+**Iteration 2 (r=32):** Matched transfer efficiency:
+`(0.68 − 0.72) / (4.92 − 0.26) ≈ 0`.
+Control is slightly *higher* than subliminal; the r=32 lift vs baseline is
+training noise, not trait transfer.
 
-**Conclusion:** r=8 showed no transfer. r=32 shows a higher mean than baseline,
-but the lift is not significant at 95% and remains far below the teacher (4.92).
-Next critical measurement is the unpoisoned-data control student under the same
-r=32 recipe.
+**Conclusion:** No measurable subliminal transfer under LoRA SFT. The pipeline
+detects the teacher trait (4.92); students remain near baseline.
 
 ## Diagnosis
 
-Hypotheses considered and their status:
-
-1. **Base-model mismatch (unsloth mirror vs official / vLLM).** *Ruled out.*
-   Training used our `sl/finetuning/services.py`, which loads via Unsloth with
-   `load_in_4bit=False`. `unsloth/Qwen3-14B` is a bit-identical bf16 mirror of
-   `Qwen/Qwen3-14B`; the "base: unsloth/Qwen3-14B" tag on the HF card is just
-   Unsloth's metadata normalization. Student init matches the teacher base.
-
-2. **4-bit / quantized initialization.** *Ruled out.* Full precision was used
-   (`load_in_4bit=False`, `load_in_8bit=False`). Re-running in full precision
-   would therefore produce an identical model.
-
-3. **LoRA capacity too low.** *Partially addressed.* r=32 raised the point
-   estimate vs r=8, but transfer is still weak / not significant. Full
-   fine-tuning remains a stronger channel (as in the subliminal-learning paper).
-
-4. **Trait abstractness.** A high-level geopolitical stance may transfer through
-   numbers more weakly than simple preferences (e.g. favorite animal). Still open.
+1. **Base-model mismatch.** *Ruled out.* Unsloth bf16 mirror is bit-identical.
+2. **4-bit init.** *Ruled out.* Full precision was used.
+3. **LoRA capacity.** *Addressed and still null.* r=32 did not produce
+   subliminal > control. Full FT remains an open stronger channel.
+4. **Trait abstractness.** Still plausible: geopolitical stance may encode
+   weakly in number sequences vs simple preferences.
 
 ## Actions Taken
 
-- Verified endpoint + pipeline health (RunPod target HTTP 200; DeepInfra ~3.5s latency).
-- Ran the 50-plan r=8 subliminal-student eval; saved to `data/auditbench/results_subliminal/`.
-- Updated `cfgs/secret_loyalty/ft_cfgs.py` to **r=32, alpha=64, 5 epochs**.
-- Trained and evaluated `subliminal_student_r32`
-  (`acupoftea/qwen3_14b-secret_loyalty_subliminal_numbers_r32`); saved to
-  `data/auditbench/results_subliminal_r32/` (positive_mean=0.68).
-- Hardened AuditBench clients with longer timeouts / more retries after a
-  DeepInfra connect timeout mid-eval.
+- Evalled teacher, baseline, subliminal r=8, subliminal r=32, control r=32.
+- Hardened AuditBench clients (timeouts/retries) after DeepInfra connect timeouts.
+- Wrote `REPORT.md` and `AGENTS.md`.
 
-## Next Steps
+## Next Steps (optional)
 
-1. Serve and evaluate the **control** `_r32` student (unpoisoned number data) so
-   we can compute real transfer efficiency.
-2. If control ≈ subliminal, treat the r=32 lift as training noise / false positive.
-3. If subliminal ≫ control, consider full fine-tuning
-   (`full_finetuning=True`, no LoRA) — requires a larger GPU for 14B.
+1. Full fine-tuning (no LoRA) for both students.
+2. Positive-control trait (e.g. animal preference) on the same stack.
+3. More seeds / plans to tighten CIs.
 
 ## Notes / Lessons
 
-- The runner uses `print()` and Python buffers stdout when not attached to a TTY,
-  so progress is invisible until the process flushes. Use `PYTHONUNBUFFERED=1`
-  (and consider higher `--concurrency`) for visibility on long eval runs.
-- Results and `summary.json` are written only after a target finishes; an empty
-  results directory mid-run is expected, not a failure.
-- DeepInfra orchestrator connect timeouts can abort a long eval; raise OpenAI
-  client `timeout` / `max_retries` and keep concurrency moderate.
+- Use `PYTHONUNBUFFERED=1`; results appear only after a target finishes.
+- Raise OpenAI client `timeout` / `max_retries` for DeepInfra; keep concurrency moderate.
+- Always compare subliminal to a **matched control** on unpoisoned numbers.

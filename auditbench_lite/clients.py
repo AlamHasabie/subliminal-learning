@@ -109,7 +109,14 @@ class OpenAIOrchestratorClient:
         if not self.api_key:
             import os
             self.api_key = os.environ.get("DEEPINFRA_API_KEY", "")
-        self._client = AsyncOpenAI(base_url=self.base_url, api_key=self.api_key)
+        # ConnectTimeout was observed against DeepInfra under load; raise connect
+        # and overall timeouts above the OpenAI SDK defaults (connect=5s).
+        self._client = AsyncOpenAI(
+            base_url=self.base_url,
+            api_key=self.api_key,
+            timeout=120.0,
+            max_retries=5,
+        )
 
     async def chat(
         self,
@@ -185,7 +192,12 @@ class OpenAICompatTargetClient(TargetClient):
 
     def __post_init__(self):
         from openai import AsyncOpenAI
-        self._client = AsyncOpenAI(base_url=self.base_url, api_key=self.api_key)
+        self._client = AsyncOpenAI(
+            base_url=self.base_url,
+            api_key=self.api_key,
+            timeout=120.0,
+            max_retries=5,
+        )
         self.name = f"{self.model}@{self.base_url}"
 
     async def chat(self, messages: list[dict], **kwargs) -> str:
@@ -204,7 +216,7 @@ class OpenAICompatTargetClient(TargetClient):
 
 # ---------------------------- Retry helper ---------------------------------
 
-async def with_retry(coro_factory, n: int = 3, base_delay: float = 2.0):
+async def with_retry(coro_factory, n: int = 5, base_delay: float = 2.0):
     """Retry an async callable with exponential backoff."""
     last_exc = None
     for attempt in range(n):
